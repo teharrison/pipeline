@@ -1,22 +1,17 @@
 # MG-RAST pipeline Dockerfile
 
-FROM debian
-MAINTAINER The MG-RAST team
-
+FROM ubuntu:18.10
+MAINTAINER The MG-RAST team (folker@mg-rast.org)
 ARG DEBIAN_FRONTEND=noninteractive
-RUN apt-get update -qq && apt-get install -y locales -qq && locale-gen en_US.UTF-8 en_us && dpkg-reconfigure locales && dpkg-reconfigure locales && locale-gen C.UTF-8 && /usr/sbin/update-locale LANG=C.UTF-8
-ENV LANG C.UTF-8
-ENV LANGUAGE C.UTF-8
-ENV LC_ALL C.UTF-8
 
 RUN apt-get update && apt-get install -y \
 	cdbfasta 	\
 	cd-hit		\
 	cmake       \
 	dh-autoreconf \
+	emacs \
 	git 		\
-	jellyfish 	\
-    libtbb-dev \
+  libtbb-dev \
 	libcwd-guard-perl \
 	libberkeleydb-perl \
 	libdata-dump-streamer-perl \
@@ -35,128 +30,171 @@ RUN apt-get update && apt-get install -y \
 	libpng-dev \
 	libposix-strptime-perl \
 	libstring-random-perl \
+	libtbb-dev \
 	libtemplate-perl \
 	liburi-encode-perl \
 	libunicode-escape-perl \
 	libwww-perl \
 	liblog-log4perl-perl \
-	libcapture-tiny-perl \
 	make 		\
+	nodejs \
 	python-biopython \
 	python-dev \
 	python-leveldb \
 	perl-modules \
-   	python-numpy \
+  python-numpy \
 	python-pika \
-    python-pip \
+  python-pip \
 	python-scipy \
 	python-sphinx \
 	unzip \
 	wget \
-    vim \
-	curl
+  vim \
+	curl \
+	&& apt-get clean
 
-#### install BLAT from src
-RUN cd /root \
-	&& wget "http://users.soe.ucsc.edu/~kent/src/blatSrc35.zip" \
-	&& unzip blatSrc35.zip && export C_INCLUDE_PATH=/root/include \
-	&& export MACHTYPE=x86_64-pc-linux-gnu \
-	&& cd blatSrc \
-	&& make BINDIR=/usr/local/bin/ \
-	&& strip /usr/local/bin/blat \
-	&& cd /root ; rm -rf blatSrc blatSrc35.zip
+### alphabetically sorted builds from source
 
-### install FragGeneScan from our patched source in github
+### install latest bowtie2 release
 RUN cd /root \
-	&& git clone https://github.com/wltrimbl/FGS.git FragGeneScan \
-	&& cd FragGeneScan \
-	&& make \
-	&& mkdir bin \
-	&& mv train bin/. \
-	&& mv *.pl bin/. \
-	&& install -s -m555 FragGeneScan bin/. \
-	&& make clean \
-	&& rm -rf example .git
-ENV PATH /root/FragGeneScan/bin:$PATH
+		&& 	curl -s https://api.github.com/repos/BenLangmead/bowtie2/releases/latest  \
+		| grep tarball_url | cut -f4 -d\" | wget -O download.tar.gz -qi - \
+		&& tar xzfp download.tar.gz \
+    && rm -f download.tar.gz \
+    && cd * \
+    && make \
+    && install bowtie2* /usr/local/bin/ \
+    && cd /root \
+    && rm -rf *bowtie2*
 
-### install DIAMOND
+### install autoskewer (requires bowtie)
 RUN cd /root \
-	&& git clone https://github.com/bbuchfink/diamond.git \
-	&& cd diamond \
+    && git clone http://github.com/MG-RAST/autoskewer \
+    && cd autoskewer \
+    && make install \
+    && cd /root \
+    && rm -rf autoskewer
+
+### install latest DIAMOND release
+RUN cd /root \
+	&& 	curl -s https://api.github.com/repos/bbuchfink/diamond/releases/latest  \
+	| grep tarball_url | cut -f4 -d\" | wget -O download.tar.gz -qi - \
+	&& tar xzfp download.tar.gz \
+	&& rm -f download.tar.gz \
+  && cd * \
 	&& sh ./build_simple.sh \
 	&& install -s -m555 diamond /usr/local/bin \
-	&& cd /root ; rm -rf diamond
+	&& cd /root \
+	&& rm -rf *diamond*
 
-### install ea-utils
+### install latest ea-utils release
 RUN cd /root \
-	&& git clone https://github.com/ExpressionAnalysis/ea-utils.git  \
-	&& cd ea-utils/clipper \
+	&& curl -s https://api.github.com/repos/ExpressionAnalysis/ea-utils/releases/latest  \
+	| grep tarball_url | cut -f4 -d\" | wget -O download.tar.gz -qi - \
+	&& tar xzfp download.tar.gz \
+	&& rm -f download.tar.gz \
+  && cd *ea-utils*/clipper \
 	&& make fastq-multx \
 	&& make fastq-join \
 	&& make fastq-mcf \
 	&& install -m755 -s fastq-multx /usr/local/bin \
 	&& install -m755 -s fastq-join /usr/local/bin \
 	&& install -m755 -s fastq-mcf /usr/local/bin \
-	&& cd /root ; rm -rf ea-utils
+	&& cd /root \
+	&& rm -rf *ea-utils*
 
-### install sortmerna 2.1b
+### install FragGeneScan from our patched source in github
 RUN cd /root \
+	&& git clone https://github.com/MG-RAST/FGS.git FragGeneScan \
+	&& cd FragGeneScan \
+	&& make \
+	&& mkdir bin \
+	&& mv train bin/. \
+	&& mv *.pl bin/. \
+	&& cp -r bin/train /usr/local/bin/ \
+	&& install -s -m555 FragGeneScan /usr/local/bin/. \
+	&& install -m555 -t /usr/local/bin/. bin/*.pl \
+	&& make clean \
+	&& cd /root \
+	&& rm -rf FragGeneScan
+
+
+### install jellyfish 2.2.6 from source (2.2.8 from repo is broken)
+RUN cd /root \
+    && wget -O jellyfish.tar.gz https://github.com/gmarcais/Jellyfish/releases/download/v2.2.6/jellyfish-2.2.6.tar.gz \
+    && tar xfvz jellyfish.tar.gz \
+    && rm -f jellyfish.tar.gz \
+    && cd jelly*  \
+    && ./configure \
+    && make install \
+    && cd /root \
+    && rm -rf *jelly*
+
+### install latest prodigal release
+RUN cd /root \
+		&& curl -s https://api.github.com/repos/hyattpd/Prodigal/releases/latest  \
+		| grep tarball_url | cut -f4 -d\" | wget -O download.tar.gz -qi - \
+		&& tar xzfp download.tar.gz \
+		&& rm -f download.tar.gz \
+		&& cd *Prodigal* \
+    && make \
+    && make install \
+    && strip /usr/local/bin/prodigal \
+    && make clean \
+    && cd /root  \
+		&& rm -rf *Prodigal*
+
+	### install sortmerna 2.1b
+	RUN cd /root \
 	&& wget https://github.com/biocore/sortmerna/archive/2.1b.tar.gz \
 	&& tar xvf 2*.tar.gz \
 	&& cd sortmerna-2* \
 	&& sed -i 's/^\#define READLEN [0-9]*/#define READLEN 500000/' include/common.hpp \
 	&& ./configure \
-    && make install \
-    && make clean \
-    && cd /root ; rm -rf sortmerna-2* 2*.tar.gz
-
-### install vsearch 2.7.1
-RUN cd /root \
-    && wget https://github.com/torognes/vsearch/archive/v2.7.1.tar.gz \
-	&& tar xzf v2*.tar.gz \
-	&& cd vsearch-2* \
-	&& sh ./autogen.sh \
-	&& ./configure --prefix=/usr/local/ \
-	&& make \
 	&& make install \
-	&& make clean \
-	&& cd /root ; rm -rf vsearch-2* v2*.tar.gz
+  && make clean \
+  && cd /root \
+	&& rm -rf sortmerna-2* 2*.tar.gz
 
-### install bowtie2 2.3.4.1
-RUN cd /root \
-    && wget -O bowtie2-2.3.4.1-linux-x86_64.zip 'https://sourceforge.net/projects/bowtie-bio/files/bowtie2/2.3.4.1/bowtie2-2.3.4.1-linux-x86_64.zip/download' \
-    && unzip bowtie2-*.zip \
-    && rm -f bowtie2-*.zip \
-    && cd bowtie2-* \
-    && cp bowtie2* /usr/local/bin/.
+
 
 ### install skewer
 RUN cd /root \
-    && git clone https://github.com/teharrison/skewer \
+    && git clone --branch 0.2.2 https://github.com/relipmoc/skewer \
     && cd skewer \
     && make \
     && make install \
     && make clean \
-    && cd /root ; rm -rf skewer
+    && cd /root \
+		&& rm -rf skewer
 
-### install autoskewer
+### install latest vsearch release
 RUN cd /root \
-    && git clone http://github.com/MG-RAST/autoskewer \
-    && cd autoskewer \
-    && make
-ENV PATH /root/autoskewer/:$PATH
+		&& curl -s https://api.github.com/repos/torognes/vsearch/releases/latest  \
+		| grep tarball_url | cut -f4 -d\" | wget -O download.tar.gz -qi - \
+		&& tar xzfp download.tar.gz \
+		&& rm -f download.tar.gz \
+		&& cd * \
+		&& sh ./autogen.sh \
+		&& ./configure --prefix=/usr/local/ \
+		&& make \
+		&& make install \
+		&& make clean \
+		&& strip /usr/local/bin/vsearch* \
+		&& cd /root \
+		&& rm -rf *vsearch*
+
+
 
 ### install CWL runner
 RUN pip install --upgrade pip
-RUN pip install cwlref-runner
+RUN pip install --upgrade cwlref-runner typing statistics
 
-# node.js version 7
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash - ; \
-    apt-get install -y nodejs
+
+# for jellyfish (ugly)
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # copy files into image
 COPY CWL /CWL/
 COPY mgcmd/* bin/* /usr/local/bin/
 COPY lib/* /usr/local/lib/site_perl/
-COPY superblat /usr/local/bin/
-RUN chmod 555 /usr/local/bin/* && strip /usr/local/bin/superblat

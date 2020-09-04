@@ -24,6 +24,7 @@ our $mg_email = '"Metagenomics Analysis Server" <help@mg-rast.org>';
 our $mg_smtp = 'smtp.mcs.anl.gov';
 our $global_attr = "userattr.json";
 our $agent = LWP::UserAgent->new();
+$agent->env_proxy;
 $agent->timeout(3600);
 our $json = JSON->new;
 $json = $json->utf8();
@@ -131,11 +132,11 @@ sub obj_from_url {
     
     my @args = $token ? ('authorization', "mgrast $token") : ();
     
-    my ($new_url, $host) = fix_api_url($url);
-    if ($new_url) {
-        $url = $new_url;
-        push @args, ('host', $host);
-    }
+    # my ($new_url, $host) = fix_api_url($url);
+    # if ($new_url) {
+    #     $url = $new_url;
+    #     push @args, ('host', $host);
+    # }
     
     my $result = $agent->get($url, @args);
     unless ($result) {
@@ -170,11 +171,11 @@ sub async_obj_from_url {
     }
     my @args = $token ? ('authorization', "mgrast $token") : ();
     
-    my ($new_url, $host) = fix_api_url($url);
-    if ($new_url) {
-        $url = $new_url;
-        push @args, ('host', $host);
-    }
+    # my ($new_url, $host) = fix_api_url($url);
+    # if ($new_url) {
+    #     $url = $new_url;
+    #     push @args, ('host', $host);
+    # }
     
     my $content = undef;
     eval {
@@ -190,11 +191,11 @@ sub async_obj_from_url {
             sleep 120;
             my $status_url = $content->{url};
             my @status_args = ();
-            my ($new_url, $host) = fix_api_url($status_url);
-            if ($new_url) {
-                $status_url = $new_url;
-                push @status_args, ('host', $host);
-            }
+            # my ($new_url, $host) = fix_api_url($status_url);
+            # if ($new_url) {
+            #     $status_url = $new_url;
+            #     push @status_args, ('host', $host);
+            # }
             $result = $agent->get( $status_url, @status_args );
             $content = $json->decode( $result->content );
             if ($content->{ERROR}) {
@@ -229,19 +230,19 @@ sub shock_time {
 sub post_data {
     my ($url, $token, $data, $no_die) = @_;
     
-    my ($new_url, $host) = fix_api_url($url);
-    if ($new_url) {
-        $url = $new_url;
-    }
+    # my ($new_url, $host) = fix_api_url($url);
+    # if ($new_url) {
+    #     $url = $new_url;
+    # }
     
     my $req = HTTP::Request->new(POST => $url);
     $req->header('content-type' => 'application/json');
     if ($token) {
         $req->header('authorization' => "mgrast $token");
     }
-    if ($new_url) {
-        $req->header('host' => $host);
-    }
+    # if ($new_url) {
+    #     $req->header('host' => $host);
+    # }
     
     $req->content($json->encode($data));
     my $resp = $agent->request($req);
